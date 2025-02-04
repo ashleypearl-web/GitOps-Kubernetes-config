@@ -106,21 +106,34 @@ jobs:
           curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.7.1/argocd-linux-amd64
           chmod +x /usr/local/bin/argocd
 
+      - name: Verify ArgoCD CLI installation
+        run: |
+          argocd version
+
       - name: Install ArgoCD in EKS
         run: |
           kubectl get namespace argocd || kubectl create namespace argocd
           kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
           kubectl rollout status deployment/argocd-server -n argocd
 
+      - name: Update ArgoCD RBAC policy
+        run: |
+          kubectl patch configmap argocd-rbac-cm -n argocd \
+            --patch '{"data":{"policy.csv":"g, admin, applications, sync, *"}}'
+
       - name: Get ArgoCD initial password
         run: |
           ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)
           echo "ARGOCD_PASSWORD=$ARGOCD_PASSWORD" >> $GITHUB_ENV
 
+      - name: Wait for ArgoCD API server
+        run: |
+          kubectl wait --for=condition=available --timeout=60s deployment/argocd-server -n argocd
+
       - name: Port forward ArgoCD API server
         run: |
           kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-          sleep 10
+          kubectl wait --for=condition=available --timeout=60s deployment/argocd-server -n argocd
 
       - name: Login to ArgoCD
         run: |
@@ -129,4 +142,6 @@ jobs:
       - name: Sync Application in ArgoCD
         run: |
           argocd app sync my-application
+          argocd app wait my-application --sync
+
 
