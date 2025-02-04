@@ -132,8 +132,8 @@ jobs:
 
       - name: Port forward ArgoCD API server
         run: |
-          kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-          kubectl wait --for=condition=available --timeout=60s deployment/argocd-server -n argocd
+          kubectl port-forward svc/argocd-server -n argocd 8080:443 & 
+          sleep 15 # Adding some sleep time to ensure the port-forward is active
 
       - name: Login to ArgoCD
         run: |
@@ -143,5 +143,6 @@ jobs:
         run: |
           argocd app sync my-application
           argocd app wait my-application --sync
+
 
 
