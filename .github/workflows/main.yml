@@ -72,60 +72,60 @@ jobs:
           tags: latest,${{ github.run_number }}
           daemon_off: false
           dockerfile: ./Dockerfile
-          context: ./
+          context: ./ 
 
   DeployToEKS:
-     needs: BUILD_AND_PUBLISH
-     runs-on: ubuntu-latest
-     steps:
-       - name: code checkout
-         uses: actions/checkout@v4
+    needs: BUILD_AND_PUBLISH
+    runs-on: ubuntu-latest
+    steps:
+      - name: code checkout
+        uses: actions/checkout@v4
 
-       - name: configure AWS credentials
-         uses: aws-actions/configure-aws-credentials@v4
-         with: 
-           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-           aws-region: ${{ env.AWS_REGION }}
+      - name: configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with: 
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-       - name: Get Kube config file
-         run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
+      - name: Get Kube config file
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER }}
 
-       - name: Print config file
-         run: cat ~/.kube/config
+      - name: Print config file
+        run: cat ~/.kube/config
 
       - name: Delete existing regcred secret (if it exists)
         run: |
           kubectl delete secret regcred || true
-   
-       - name: Login to ECR
-         run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTRY }} --docker-username=AWS  --docker-password=$(aws ecr get-login-password) 
 
-       - name: Install ArgoCD CLI
-         run: |
-           curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.7.1/argocd-linux-amd64
-           chmod +x /usr/local/bin/argocd
+      - name: Login to ECR
+        run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTRY }} --docker-username=AWS --docker-password=$(aws ecr get-login-password)
 
-       - name: Install ArgoCD in EKS
-         run: |
-           kubectl create namespace argocd
-           kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-           kubectl rollout status deployment/argocd-server -n argocd
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.7.1/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
 
-       - name: Get ArgoCD initial password
-         run: |
-           ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)
-           echo "ARGOCD_PASSWORD=$ARGOCD_PASSWORD" >> $GITHUB_ENV
+      - name: Install ArgoCD in EKS
+        run: |
+          kubectl create namespace argocd
+          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+          kubectl rollout status deployment/argocd-server -n argocd
 
-       - name: Port forward ArgoCD API server
-         run: |
-           kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-           sleep 10
+      - name: Get ArgoCD initial password
+        run: |
+          ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)
+          echo "ARGOCD_PASSWORD=$ARGOCD_PASSWORD" >> $GITHUB_ENV
 
-       - name: Login to ArgoCD
-         run: |
-           argocd login localhost:8080 --username admin --password ${{ env.ARGOCD_PASSWORD }} --insecure
+      - name: Port forward ArgoCD API server
+        run: |
+          kubectl port-forward svc/argocd-server -n argocd 8080:443 &
+          sleep 10
 
-       - name: Sync Application in ArgoCD
-         run: |
-           argocd app sync my-application --sync-policy automated
+      - name: Login to ArgoCD
+        run: |
+          argocd login localhost:8080 --username admin --password ${{ env.ARGOCD_PASSWORD }} --insecure
+
+      - name: Sync Application in ArgoCD
+        run: |
+          argocd app sync my-application --sync-policy automated
