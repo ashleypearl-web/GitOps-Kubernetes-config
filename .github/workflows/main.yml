@@ -128,4 +128,5 @@ jobs:
 
       - name: Sync Application in ArgoCD
         run: |
-          argocd app sync my-application --sync-policy automated
+          argocd app sync my-application
+
