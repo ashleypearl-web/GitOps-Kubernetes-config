@@ -55,7 +55,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}  # Use AWS_REGION from the env section
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
         run: |
@@ -66,10 +66,11 @@ jobs:
         with:
           access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          registry: ${{ secrets.REGISTRY }}
+          registry: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           repo: ${{ env.ECR_REPOSITORY }}
-          region: ${{ env.AWS_REGION }}  # Use AWS_REGION from the env section
+          region: ${{ env.AWS_REGION }}
           tags: latest,${{ github.run_number }}
           daemon_off: false
           dockerfile: ./Dockerfile
           context: ./
+
