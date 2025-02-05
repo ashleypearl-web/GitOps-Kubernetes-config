@@ -126,23 +126,26 @@ jobs:
           ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)
           echo "ARGOCD_PASSWORD=$ARGOCD_PASSWORD" >> $GITHUB_ENV
 
-      - name: Wait for ArgoCD API server
+      - name: Wait for ArgoCD API server to be ready
         run: |
-          kubectl wait --for=condition=available --timeout=60s deployment/argocd-server -n argocd
+          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
 
-      - name: Port forward ArgoCD API server
+      - name: Get ArgoCD External URL
         run: |
-          kubectl port-forward svc/argocd-server -n argocd 8080:443 & 
-          sleep 30 # Adding some sleep time to ensure the port-forward is active
+          ARGOCD_SERVER=$(kubectl get svc -n argocd argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "ARGOCD_SERVER=$ARGOCD_SERVER" >> $GITHUB_ENV
 
-      - name: Login to ArgoCD
+      - name: Retry port forward and check if ArgoCD is up
         run: |
-          argocd login localhost:8080 --username admin --password ${{ env.ARGOCD_PASSWORD }} --insecure
+          for i in {1..10}; do
+            kubectl port-forward svc/argocd-server -n argocd 8080:443 & sleep 10 && curl --silent --fail localhost:8080/healthz && break || echo "Retrying..."
+          done
+
+      - name: Login to ArgoCD using external URL
+        run: |
+          argocd login ${{ env.ARGOCD_SERVER }} --username admin --password ${{ env.ARGOCD_PASSWORD }} --insecure
 
       - name: Sync Application in ArgoCD
         run: |
           argocd app sync my-application
           argocd app wait my-application --sync
-
-
-
