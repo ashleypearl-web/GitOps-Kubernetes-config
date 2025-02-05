@@ -81,7 +81,7 @@ jobs:
       - name: code checkout
         uses: actions/checkout@v4
 
-      - name: configure AWS credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with: 
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -94,58 +94,18 @@ jobs:
       - name: Print config file
         run: cat ~/.kube/config
 
-      - name: Delete existing regcred secret (if it exists)
-        run: |
-          kubectl delete secret regcred || true
-
       - name: Login to ECR
-        run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTRY }} --docker-username=AWS --docker-password=$(aws ecr get-login-password)
+        run: kubectl create secret docker-registry regcred --docker-server=${{ secrets.REGISTRY }} --docker-username=AWS  --docker-password=$(aws ecr get-login-password) 
 
-      - name: Install ArgoCD CLI
-        run: |
-          curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/download/v2.7.1/argocd-linux-amd64
-          chmod +x /usr/local/bin/argocd
-
-      - name: Verify ArgoCD CLI installation
-        run: |
-          argocd version
-
-      - name: Install ArgoCD in EKS
-        run: |
-          kubectl get namespace argocd || kubectl create namespace argocd
-          kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-          kubectl rollout status deployment/argocd-server -n argocd
-
-      - name: Update ArgoCD RBAC policy
-        run: |
-          kubectl patch configmap argocd-rbac-cm -n argocd \
-            --patch '{"data":{"policy.csv":"g, admin, applications, sync, *"}}'
-
-      - name: Get ArgoCD initial password
-        run: |
-          ARGOCD_PASSWORD=$(kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.password}' | base64 --decode)
-          echo "ARGOCD_PASSWORD=$ARGOCD_PASSWORD" >> $GITHUB_ENV
-
-      - name: Wait for ArgoCD API server to be ready
-        run: |
-          kubectl wait --for=condition=available --timeout=300s deployment/argocd-server -n argocd
-
-      - name: Get ArgoCD External URL
-        run: |
-          ARGOCD_SERVER=$(kubectl get svc -n argocd argocd-server -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          echo "ARGOCD_SERVER=$ARGOCD_SERVER" >> $GITHUB_ENV
-
-      - name: Retry port forward and check if ArgoCD is up
-        run: |
-          for i in {1..10}; do
-            kubectl port-forward svc/argocd-server -n argocd 8080:443 & sleep 10 && curl --silent --fail localhost:8080/healthz && break || echo "Retrying..."
-          done
-
-      - name: Login to ArgoCD using external URL
-        run: |
-          argocd login ${{ env.ARGOCD_SERVER }} --username admin --password ${{ env.ARGOCD_PASSWORD }} --insecure
-
-      - name: Sync Application in ArgoCD
-        run: |
-          argocd app sync my-application
-          argocd app wait my-application --sync
+      - name: Deploy Helm
+        uses: bitovi/github-actions-deploy-eks-helm@v1.2.8
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          cluster-name: ${{ env.EKS_CLUSTER }}
+          #config-files: .github/values/dev.yaml
+          chart-path: helm/vprofilecharts
+          namespace: default
+          values: appimage=${{ secrets.REGISTRY }}/${{ env.ECR_REPOSITORY }},apptag=${{ github.run_number }}
+          name: ashley-stack
