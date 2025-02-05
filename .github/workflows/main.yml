@@ -133,7 +133,7 @@ jobs:
       - name: Port forward ArgoCD API server
         run: |
           kubectl port-forward svc/argocd-server -n argocd 8080:443 & 
-          sleep 15 # Adding some sleep time to ensure the port-forward is active
+          sleep 30 # Adding some sleep time to ensure the port-forward is active
 
       - name: Login to ArgoCD
         run: |
